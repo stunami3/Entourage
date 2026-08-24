@@ -341,9 +341,9 @@
     <div class="tb-row">
       <div class="slider-wrap">
         <div class="slider-head">
-          <span class="slider-label"><i class="dot" style="background:var(--sativa)"></i> Sativa-like</span>
-          <span class="slider-readout" id="efsliderreadout">Effect lean: any</span>
-          <span class="slider-label">Indica-like <i class="dot" style="background:var(--indica)"></i></span>
+          <span class="slider-label"><i class="dot" style="background:var(--sativa)"></i> Energizing</span>
+          <span class="slider-readout" id="efsliderreadout">Effect: any</span>
+          <span class="slider-label">Sedating <i class="dot" style="background:var(--indica)"></i></span>
         </div>
         <div class="slider-track" id="efslidertrack">
           <div class="slider-range" id="efsliderrange"><div class="fill" id="efsliderfill"></div></div>
@@ -867,7 +867,7 @@ function openSheet(d){
         <span class="k">DEVICE</span><span class="v">${device}</span>
         <span class="k">SIZE</span><span class="v">${d.size||''}</span>
         <span class="k">ADDED</span><span class="v">${(!d.added||d.added==='\u2014')?'not recorded':d.added}</span>
-        ${(()=>{const e=effLeanOf(d);return e!=null?`<span class="k">EFFECT LEAN</span><span class="v">${e}% indica-style \u00b7 from terps</span>`:''})()}
+        ${(()=>{const e=effLeanOf(d);return e!=null?`<span class="k">EFFECT</span><span class="v">${e}% sedating \u00b7 from terps</span>`:''})()}
       </div>
     </div>
     <div class="sheet-actions">
@@ -1067,13 +1067,18 @@ ipmin.addEventListener('input',syncSlider);
 ipmax.addEventListener('input',syncSlider);
 const efmin=document.getElementById('efmin'), efmax=document.getElementById('efmax');
 const efrange=document.getElementById('efsliderrange'), effill=document.getElementById('efsliderfill'), efreadout=document.getElementById('efsliderreadout');
+function efLabel(lo,hi){
+  const band=v=>v<=30?'energizing':v<=40?'energizing-leaning':v<60?'balanced':v<=70?'sedating-leaning':'sedating';
+  const a=band(lo),b=band(hi);
+  return (a===b?a:`${a} \u2192 ${b}`)+`  (${lo}\u2013${hi}% sedating)`;
+}
 function syncEfSlider(){
   let lo=+efmin.value, hi=+efmax.value;
   if(lo>hi){ [lo,hi]=[hi,lo]; }
   state.efMin=lo; state.efMax=hi;
   efrange.style.left=lo+'%'; efrange.style.width=(hi-lo)+'%';
   const full=(lo===0&&hi===100);
-  efreadout.textContent= full ? 'Effect lean: any' : 'Effect lean '+ipLabel(lo,hi);
+  efreadout.textContent= full ? 'Effect: any' : 'Effect '+efLabel(lo,hi);
   efreadout.style.color= full ?'var(--muted-2)':'var(--amber)';
   if(hi<=lo){ efrange.style.width='2px'; effill.style.width='100%'; effill.style.left='0'; }
   else { const span=hi-lo; effill.style.width=(100/span*100)+'%'; effill.style.left=(-lo/span*100)+'%'; }
@@ -1430,8 +1435,8 @@ function openManualForm(prefill, reviewIdx){
   const updateLean=()=>{
     const lean=computeLeanFromTerps(readTerpFields());
     document.getElementById('f-lean').textContent = lean
-      ? `Effect lean (auto from terps): ${lean.ipct}% indica / ${100-lean.ipct}% sativa — ${lean.cls}`
-      : 'Effect lean: auto-calculated once terps are entered';
+      ? `Effect (auto from terps): ${lean.ipct}% sedating / ${100-lean.ipct}% energizing`
+      : 'Effect: auto-calculated once terps are entered';
   };
   ALL_MANUAL_TERPS.forEach(t=>document.getElementById('f-terp-'+t.id).addEventListener('input',updateLean));
   const moreBtn=document.getElementById('terpmoretoggle');
@@ -1523,6 +1528,7 @@ document.getElementById('importfile').addEventListener('change', async (e)=>{
 (async function boot(){
   await loadAll();
   syncSlider();
+  syncEfSlider();
   render();
 })();
 </script>
