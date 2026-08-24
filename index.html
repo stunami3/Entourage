@@ -237,6 +237,9 @@
   .field-label:first-child{margin-top:0}
   .finput{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px 13px;font-size:15px}
   .finput:focus{outline:2px solid var(--amber-dim);outline-offset:1px;border-color:transparent}
+  .terp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:2px}
+  .terp-grid .tg-cell label{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+  .terp-grid .tg-cell input{padding:9px 11px}
   textarea.finput{min-height:70px;resize:vertical}
   .fselect{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px 13px;font-size:15px;-webkit-appearance:none;appearance:none}
   .goal-check{display:flex;flex-wrap:wrap;gap:7px;margin-top:2px}
@@ -325,13 +328,27 @@
       <div class="slider-wrap">
         <div class="slider-head">
           <span class="slider-label"><i class="dot" style="background:var(--sativa)"></i> Sativa</span>
-          <span class="slider-readout" id="sliderreadout">All types</span>
+          <span class="slider-readout" id="sliderreadout">Lineage: any</span>
           <span class="slider-label">Indica <i class="dot" style="background:var(--indica)"></i></span>
         </div>
         <div class="slider-track" id="slidertrack">
           <div class="slider-range" id="sliderrange"><div class="fill" id="sliderfill"></div></div>
           <input type="range" id="ipmin" min="0" max="100" step="5" value="0" aria-label="Minimum indica percentage">
           <input type="range" id="ipmax" min="0" max="100" step="5" value="100" aria-label="Maximum indica percentage">
+        </div>
+      </div>
+    </div>
+    <div class="tb-row">
+      <div class="slider-wrap">
+        <div class="slider-head">
+          <span class="slider-label"><i class="dot" style="background:var(--sativa)"></i> Sativa-like</span>
+          <span class="slider-readout" id="efsliderreadout">Effect lean: any</span>
+          <span class="slider-label">Indica-like <i class="dot" style="background:var(--indica)"></i></span>
+        </div>
+        <div class="slider-track" id="efslidertrack">
+          <div class="slider-range" id="efsliderrange"><div class="fill" id="efsliderfill"></div></div>
+          <input type="range" id="efmin" min="0" max="100" step="5" value="0" aria-label="Minimum effect-lean indica percentage">
+          <input type="range" id="efmax" min="0" max="100" step="5" value="100" aria-label="Maximum effect-lean indica percentage">
         </div>
       </div>
     </div>
@@ -438,7 +455,7 @@ function isPortable(d){
   if(d.cat==='dab'||d.cat==='flower') return false;
   return !!d.portable;
 }
-const state={where:"home",goal:"any",cat:"any",q:"",archive:false,ipMin:0,ipMax:100};
+const state={where:"home",goal:"any",cat:"any",q:"",archive:false,ipMin:0,ipMax:100,efMin:0,efMax:100};
 const collapsed={};
 const SECTIONS=[
   {id:'dab',label:'Live Rosin Jars',sub:'Home'},
@@ -850,6 +867,7 @@ function openSheet(d){
         <span class="k">DEVICE</span><span class="v">${device}</span>
         <span class="k">SIZE</span><span class="v">${d.size||''}</span>
         <span class="k">ADDED</span><span class="v">${(!d.added||d.added==='\u2014')?'not recorded':d.added}</span>
+        ${(()=>{const e=effLeanOf(d);return e!=null?`<span class="k">EFFECT LEAN</span><span class="v">${e}% indica-style \u00b7 from terps</span>`:''})()}
       </div>
     </div>
     <div class="sheet-actions">
@@ -931,6 +949,10 @@ function match(d){
   if(state.goal!=='any' && !(d.goals||[]).includes(state.goal)) return false;
   if(d.ipct!=null && !(state.ipMin===0&&state.ipMax===100)){
     if(d.ipct<state.ipMin||d.ipct>state.ipMax) return false;
+  }
+  if(!(state.efMin===0&&state.efMax===100)){
+    const e=effLeanOf(d);
+    if(e==null||e<state.efMin||e>state.efMax) return false;
   }
   if(state.q){
     const hay=(d.name+' '+(d.gen||'')+' '+(d.eff||'')+' '+(d.research||'')+' '+(d.type||'')+' '+(d.cls||'')).toLowerCase();
@@ -1033,8 +1055,9 @@ function syncSlider(){
   if(lo>hi){ [lo,hi]=[hi,lo]; }
   state.ipMin=lo; state.ipMax=hi;
   sliderrange.style.left=lo+'%'; sliderrange.style.width=(hi-lo)+'%';
-  readout.textContent=ipLabel(lo,hi);
-  readout.style.color=(lo===0&&hi===100)?'var(--muted-2)':'var(--amber)';
+  const full=(lo===0&&hi===100);
+  readout.textContent= full ? 'Lineage: any' : 'Lineage '+ipLabel(lo,hi);
+  readout.style.color= full ?'var(--muted-2)':'var(--amber)';
   const fill=document.getElementById('sliderfill');
   if(hi<=lo){ sliderrange.style.width='2px'; fill.style.width='100%'; fill.style.left='0'; }
   else { const span=hi-lo; fill.style.width=(100/span*100)+'%'; fill.style.left=(-lo/span*100)+'%'; }
@@ -1042,6 +1065,22 @@ function syncSlider(){
 }
 ipmin.addEventListener('input',syncSlider);
 ipmax.addEventListener('input',syncSlider);
+const efmin=document.getElementById('efmin'), efmax=document.getElementById('efmax');
+const efrange=document.getElementById('efsliderrange'), effill=document.getElementById('efsliderfill'), efreadout=document.getElementById('efsliderreadout');
+function syncEfSlider(){
+  let lo=+efmin.value, hi=+efmax.value;
+  if(lo>hi){ [lo,hi]=[hi,lo]; }
+  state.efMin=lo; state.efMax=hi;
+  efrange.style.left=lo+'%'; efrange.style.width=(hi-lo)+'%';
+  const full=(lo===0&&hi===100);
+  efreadout.textContent= full ? 'Effect lean: any' : 'Effect lean '+ipLabel(lo,hi);
+  efreadout.style.color= full ?'var(--muted-2)':'var(--amber)';
+  if(hi<=lo){ efrange.style.width='2px'; effill.style.width='100%'; effill.style.left='0'; }
+  else { const span=hi-lo; effill.style.width=(100/span*100)+'%'; effill.style.left=(-lo/span*100)+'%'; }
+  render();
+}
+efmin.addEventListener('input',syncEfSlider);
+efmax.addEventListener('input',syncEfSlider);
 
 document.getElementById('archivetoggle').addEventListener('click',function(){
   state.archive=!state.archive;
@@ -1235,10 +1274,11 @@ function mapProductTypeToCat(pt){
 async function commitParsed(idx){
   const d=pendingReview[idx].data;
   const cat=mapProductTypeToCat(d.productType);
+  const scanLean=computeLeanFromTerps((d.terpenes||[]).map(t=>({name:t.name,pct:t.pct})));
   const entry={
     id:'added-'+Date.now()+'-'+idx,
     name:d.name||'Unnamed strain',
-    abbr:null, cat, cls:'hybrid', ipct:50,
+    abbr:null, cat, cls:'hybrid', ipct:50, effIpct:scanLean?scanLean.ipct:null,
     portable: cat==='cart'||cat==='distillate'||cat==='edible',
     rating:null,
     type: d.brand||'', gen:d.cultivator||'',
@@ -1265,15 +1305,63 @@ async function commitParsed(idx){
   }
 }
 
+const TERP_LEAN_WEIGHTS={'Myrcene':1.0,'Linalool':0.8,'Caryophyllene':0.4,'Humulene':0.3,'Limonene':-0.5,'alpha-Pinene':-0.7,'alpha-Terpinolene':-0.6};
+function computeLeanFromTerps(terps){
+  let num=0,den=0;
+  (terps||[]).forEach(t=>{const w=TERP_LEAN_WEIGHTS[t.name]; if(w!=null&&t.pct>0){num+=w*t.pct;den+=t.pct;}});
+  if(!den) return null;
+  const ipct=Math.max(0,Math.min(100,Math.round((50+(num/den)*50)/5)*5));
+  const cls= ipct>=65?'indica': ipct<=35?'sativa':'hybrid';
+  return {ipct,cls};
+}
+const MANUAL_TERPS=[
+  {id:'myrcene',       label:'Myrcene',       canon:'Myrcene'},
+  {id:'limonene',      label:'Limonene',      canon:'Limonene'},
+  {id:'caryophyllene', label:'Caryophyllene', canon:'Caryophyllene'},
+  {id:'linalool',      label:'Linalool',      canon:'Linalool'},
+  {id:'pinene',        label:'Pinene (\u03b1)', canon:'alpha-Pinene'},
+  {id:'humulene',      label:'Humulene',      canon:'Humulene'},
+  {id:'terpinolene',   label:'Terpinolene',   canon:'alpha-Terpinolene'}
+];
+const MANUAL_TERPS_MORE=[
+  {id:'bisabolol',          label:'Bisabolol',           canon:'Bisabolol'},
+  {id:'beta-pinene',        label:'Pinene (\u03b2)',      canon:'beta-Pinene'},
+  {id:'alpha-terpineol',    label:'Terpineol (\u03b1)',   canon:'alpha-Terpineol'},
+  {id:'fenchyl-alcohol',    label:'Fenchyl Alcohol',     canon:'Fenchyl Alcohol'},
+  {id:'trans-nerolidol',    label:'Nerolidol (trans)',   canon:'trans-Nerolidol'},
+  {id:'cis-nerolidol',      label:'Nerolidol (cis)',     canon:'cis-Nerolidol'},
+  {id:'guaiol',             label:'Guaiol',              canon:'Guaiol'},
+  {id:'farnesene',          label:'Farnesene',           canon:'Farnesene'},
+  {id:'ocimene',            label:'Ocimene',             canon:'Ocimene'},
+  {id:'alpha-phellandrene', label:'Phellandrene (\u03b1)',canon:'alpha-Phellandrene'},
+  {id:'camphene',           label:'Camphene',            canon:'Camphene'},
+  {id:'caryophyllene-oxide',label:'Caryoph. Oxide',      canon:'Caryophyllene Oxide'},
+  {id:'borneol',            label:'Borneol',             canon:'Borneol'},
+  {id:'fenchone',           label:'Fenchone',            canon:'Fenchone'},
+  {id:'alpha-cedrene',      label:'Cedrene (\u03b1)',     canon:'alpha-Cedrene'},
+  {id:'3-carene',           label:'3-Carene',            canon:'3-Carene'}
+];
+const ALL_MANUAL_TERPS=MANUAL_TERPS.concat(MANUAL_TERPS_MORE);
+function effLeanOf(d){
+  if(d&&d.effIpct!=null) return d.effIpct;
+  const l=computeLeanFromTerps(d&&d.terpenes);
+  return l?l.ipct:null;
+}
 function openManualForm(prefill, reviewIdx){
   const sheet=document.getElementById('sheet');
   const d=prefill||{};
   const cat = mapProductTypeToCat(d.productType) || 'dab';
+  const terpPrefill={};
+  (d.terpenes||[]).forEach(t=>{ const n=normalizeTerpName(t.name); if(terpPrefill[n]==null) terpPrefill[n]=t.pct; });
+  const hasMoreTerps=MANUAL_TERPS_MORE.some(t=>terpPrefill[t.canon]!=null);
   sheet.innerHTML=`<div class="grabber"></div>
     <div class="sheet-top"><div><h2 style="font-size:21px">${reviewIdx!=null?'Edit before adding':'Manual entry'}</h2></div><button class="close" id="sheetclose">\u00d7</button></div>
 
     <div class="field-label">Name</div>
     <input class="finput" id="f-name" value="${esc(d.name)}" placeholder="Strain name">
+
+    <div class="field-label">Abbreviation — optional</div>
+    <input class="finput" id="f-abbr" maxlength="6" value="${esc(d.abbr)}" placeholder="e.g. SKNK" style="text-transform:uppercase">
 
     <div class="field-label">Format</div>
     <select class="fselect" id="f-cat">
@@ -1282,6 +1370,15 @@ function openManualForm(prefill, reviewIdx){
       <option value="distillate" ${cat==='distillate'?'selected':''}>Distillate cart</option>
       <option value="flower" ${cat==='flower'?'selected':''}>Flower</option>
       <option value="edible" ${cat==='edible'?'selected':''}>Edible</option>
+    </select>
+
+    <div class="field-label">Class (dispensary label)</div>
+    <select class="fselect" id="f-class">
+      <option value="15|sativa">Sativa</option>
+      <option value="35|sativa">Sativa-leaning hybrid</option>
+      <option value="50|hybrid" selected>Hybrid (50/50)</option>
+      <option value="65|hybrid">Indica-leaning hybrid</option>
+      <option value="85|indica">Indica</option>
     </select>
 
     <div class="field-label">Type / genetics label</div>
@@ -1295,6 +1392,16 @@ function openManualForm(prefill, reviewIdx){
 
     <div class="field-label">Total terpenes</div>
     <input class="finput" id="f-terps" value="${esc(d.totalTerps)}" placeholder="e.g. 6.79%">
+
+    <div class="field-label">Individual terpenes (%) — optional</div>
+    <div class="terp-grid">
+      ${MANUAL_TERPS.map(t=>`<div class="tg-cell"><label>${t.label}</label><input class="finput" id="f-terp-${t.id}" inputmode="decimal" value="${esc(terpPrefill[t.canon]!=null?String(terpPrefill[t.canon]):'')}" placeholder="—"></div>`).join('')}
+    </div>
+    <button type="button" class="ghost-btn" id="terpmoretoggle" style="margin-top:8px;padding:9px;font-size:13px">${hasMoreTerps?'Fewer terpenes \u25b4':'More terpenes \u25be'}</button>
+    <div class="terp-grid" id="terp-more" style="display:${hasMoreTerps?'grid':'none'}">
+      ${MANUAL_TERPS_MORE.map(t=>`<div class="tg-cell"><label>${t.label}</label><input class="finput" id="f-terp-${t.id}" inputmode="decimal" value="${esc(terpPrefill[t.canon]!=null?String(terpPrefill[t.canon]):'')}" placeholder="—"></div>`).join('')}
+    </div>
+    <div id="f-lean" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px"></div>
 
     <div class="field-label">Size</div>
     <input class="finput" id="f-size" value="${esc(d.size)}" placeholder="e.g. 0.5g jar">
@@ -1311,13 +1418,46 @@ function openManualForm(prefill, reviewIdx){
     <button class="ghost-btn" id="cancelmanual">Cancel</button>`;
   document.getElementById('sheetclose').addEventListener('click',closeSheet);
   document.getElementById('cancelmanual').addEventListener('click',openAddSheet);
+  const readTerpFields=()=>{
+    const list=[];
+    ALL_MANUAL_TERPS.forEach(t=>{
+      const raw=document.getElementById('f-terp-'+t.id).value.trim().replace('%','').replace(',','.');
+      const v=parseFloat(raw);
+      if(!isNaN(v)&&v>0) list.push({name:t.canon,pct:v});
+    });
+    return list;
+  };
+  const updateLean=()=>{
+    const lean=computeLeanFromTerps(readTerpFields());
+    document.getElementById('f-lean').textContent = lean
+      ? `Effect lean (auto from terps): ${lean.ipct}% indica / ${100-lean.ipct}% sativa — ${lean.cls}`
+      : 'Effect lean: auto-calculated once terps are entered';
+  };
+  ALL_MANUAL_TERPS.forEach(t=>document.getElementById('f-terp-'+t.id).addEventListener('input',updateLean));
+  const moreBtn=document.getElementById('terpmoretoggle');
+  moreBtn.addEventListener('click',()=>{
+    const m=document.getElementById('terp-more');
+    const open=m.style.display!=='none';
+    m.style.display=open?'none':'grid';
+    moreBtn.textContent=open?'More terpenes \u25be':'Fewer terpenes \u25b4';
+  });
+  updateLean();
   document.getElementById('savemanual').addEventListener('click',async ()=>{
     const cat=document.getElementById('f-cat').value;
     const goals=[...sheet.querySelectorAll('.goal-check input:checked')].map(i=>i.value);
+    const canonSet=new Set(ALL_MANUAL_TERPS.map(t=>t.canon));
+    const terpList=((prefill&&prefill.terpenes)||[])
+      .map(t=>({name:normalizeTerpName(t.name),pct:t.pct}))
+      .filter(t=>!canonSet.has(t.name))
+      .concat(readTerpFields());
+    terpList.sort((a,b)=>b.pct-a.pct);
+    const lean=computeLeanFromTerps(terpList);
+    const clsSel=document.getElementById('f-class').value.split('|');
     const entry={
       id:'added-'+Date.now(),
       name:document.getElementById('f-name').value.trim()||'Unnamed strain',
-      abbr:null, cat, cls:'hybrid', ipct:50,
+      abbr:document.getElementById('f-abbr').value.trim().toUpperCase()||null,
+      cat, cls:clsSel[1], ipct:+clsSel[0], effIpct:lean?lean.ipct:null,
       portable: cat==='cart'||cat==='distillate'||cat==='edible',
       rating:null,
       type:document.getElementById('f-type').value.trim(), gen:'',
@@ -1325,7 +1465,7 @@ function openManualForm(prefill, reviewIdx){
       cbd:document.getElementById('f-cbd').value.trim()||'\u2014',
       terps:document.getElementById('f-terps').value.trim()||'\u2014',
       per: cat==='edible' ? 'piece' : null,
-      terpenes:(prefill&&prefill.terpenes)||[],
+      terpenes:terpList,
       cann:'', eff:document.getElementById('f-eff').value.trim(),
       goals, size:document.getElementById('f-size').value.trim(),
       status:'Active', added:new Date().toLocaleDateString('en-US',{month:'numeric',day:'numeric',year:'2-digit'})
