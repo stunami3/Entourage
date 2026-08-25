@@ -8,24 +8,35 @@ Copyright © 2026 stunami3. All Rights Reserved. Personal-use software; do not r
 
 ## What it is
 
-- **One HTML file.** No build step, no server code, no dependencies to install. Everything — markup, styles, logic, icons — is embedded in `entourage.html` (rename to `index.html` for hosting).
+- **Two generated HTML files, one source of truth.** `entourage.html` holds every feature and the real inventory data — it's what gets pasted into the Claude artifact. `index.html` is generated from it automatically by `build.py`, with the inventory stripped to empty, for self-hosting. See **Build workflow** below.
 - **Phone-first.** Designed for iPhone: sticky toolbar, bottom-sheet detail view, 44px tap targets, safe-area insets, reduced-motion support.
-- **Private by design.** Inventory data is never inside the HTML file and never sent anywhere. It lives in your device's browser storage.
+- **Private by design.** The self-hosted file never carries inventory data — it starts empty and you Import your own backup. See Storage below.
 
 ## Features
 
 - **Inventory sections** in order: Jars → Carts → Flower → Edibles, with collapse/expand all.
-- **Home / On-the-go modes.** On-the-go filters to portable products (carts); dabs and flower are home-only.
+- **Home / On-the-go modes.** On-the-go filters to portable products — carts, distillates, and edibles; dabs and flower are home-only.
 - **Goal chips** for quick filtering by intent.
-- **Sativa ↔ Indica dual-thumb slider.**
+- **Two independent sliders:**
+  - **Lineage** (Sativa ↔ Indica) — the dispensary's own label, set via a dropdown on each item (Sativa / Sativa-leaning / Hybrid / Indica-leaning / Indica).
+  - **Effect** (Energizing ↔ Sedating) — estimated from the item's terpene profile, independent of the label. Surfaces the real paradox strains — a "sativa" that reads sedating on the terp sheet, and vice versa.
+
+    The estimate is a concentration-weighted score across 23 terpenes, using **how each terpene is commonly reported to feel in the cannabis community and industry** — not lab-measured, and not clinically established. Human trial evidence for terpene-driven effects is genuinely thin; the strongest result to date (a 2024 double-blind RCT) covers d-limonene reducing THC-induced anxiety, which is not the same as an energizing/sedating axis. Terpenes with strong, near-universal consensus (myrcene, linalool, limonene, pinene, terpinolene) carry real weight; terpenes with thin or contradictory reports (camphene, farnesene, 3-carene) are deliberately weighted at or near zero so they don't fabricate a signal. Each item shows which terpenes drove its score, and flags "low confidence" when there isn't enough well-understood terpene mass to say much.
 - **Terpene bars** weighted against realistic live-rosin ceilings per terpene, so a strong Limonene reads as strong even though no terpene hits double digits.
-- **Detail sheet** with the full COA in priority order: THC → CBD → Total Terps → Myrcene → Limonene → Caryophyllene → Linalool, then the rest. Cannabinoids (CBG/CBGA) listed separately so they never displace terpenes. Tap any terpene name for a plain-language tooltip (~23 terpenes covered).
+- **Detail sheet** with the full COA in priority order: THC → CBD → Total Terps → Myrcene → Limonene → Caryophyllene → Linalool, then the rest, plus the computed Effect %. Cannabinoids (CBG/CBGA) listed separately so they never displace terpenes. Tap any terpene name for a plain-language tooltip (~23 terpenes covered).
 - **Ratings.** 1–5 stars per strain; unrated shows "Strain Not Rated."
+- **Abbreviation tag** — optional 6-character shorthand shown next to the strain name (e.g. SKNK, TDAZ).
 - **Lifecycle.** Finish (archives with date), Delete, Restore. Archive is browsable via toggle.
 - **Add products** via the + button:
   - **Scan COA** — upload a COA PDF or photo; Claude reads it and returns structured data (name, brand, type, size, THC, CBD, total terps, full terpene list, other cannabinoids, batch date, lab) for your review before anything is added. *Only works when the app runs inside Claude (published artifact or chat preview) — see Hosting below.*
-  - **Manual entry** — works everywhere.
+  - **Manual entry** — works everywhere. All 23 terpenes COAs commonly report are enterable (the 7 majors up front, the rest behind a "More terpenes" toggle), plus lineage, abbreviation, and every other field. The Effect slider position calculates live as you type.
 - **Export / Import backup** — full inventory as a JSON file, for safekeeping or moving between installs.
+
+## How index.html is generated
+
+`index.html`, the file in this repo, is not hand-written. It's generated from `entourage.html` — the single source of truth for both the app's code and the real inventory data — by stripping the two seed arrays (`SEED_ACTIVE`, `SEED_ARCHIVE`) down to empty. That's the only difference between the two files; everything else is identical.
+
+That generation step (`build.py`) lives outside this repository, alongside `entourage.html`, and is never uploaded here — so don't expect to find it in this file listing. It's mentioned for context: if you're wondering why `index.html` has no data and no unminified "source," this is why, and it's intentional (see Storage below for the privacy reasoning). Every feature update to this app happens in `entourage.html` first; `index.html` is regenerated and re-uploaded after.
 
 ## Hosting & install
 
@@ -40,7 +51,7 @@ Two ways to run it. They have different tradeoffs:
 
 ### GitHub Pages setup (iPhone-friendly)
 
-1. Rename the file to `index.html` (Files app → long-press → Rename).
+1. Get `index.html` — this is generated by `build.py` from `entourage.html` (see Build workflow above); it's already named correctly and has no personal data baked in.
 2. Create a free account at github.com.
 3. New repository → name it `entourage` → **Public** → Create.
 4. Add file → Upload files → pick `index.html` → Commit. (Use Safari's ᴬA → Request Desktop Website if menus are missing.)
@@ -100,4 +111,8 @@ The console is silent in normal use. Append `?debug=1` to the URL to enable full
 - Vanilla JS, no frameworks. Fonts: Bricolage Grotesque, Inter, JetBrains Mono.
 - Terpene name normalization maps lab COA formats (`beta-Myrcene`, `d-Limonene`, `trans-Caryophyllene`, etc.) to canonical names.
 - All user-entered and AI-parsed text is HTML-escaped before rendering.
-- The seven-leaf logo: one vesica leaf per major terpene (Myrcene, Limonene, Caryophyllene, Linalool, Pinene, Humulene, Terpinolene) in an interlocking weave — the entourage effect, drawn.
+- The seven-leaf logo: one vesica leaf per major terpene (Myrcene, Limonene, Caryophyllene, Linalool, Pinene, Humulene, Terpinolene) in an interlocking weave — the entourage effect, drawn. The amber Myrcene leaf points straight up.
+
+  Seven is an odd number, so a strictly alternating over/under weave around a ring is geometrically impossible — one crossing always ends up frustrated. The mark resolves this by reversing the stacking order inside a central disc: each leaf passes **over** its neighbours out at the petals and **under** them at the core. Every leaf therefore goes both over and under, with no leaf permanently on top or buried, and no broken seam. Each leaf carries a background-coloured halo beneath its outline, which interrupts the strand passing below and makes the crossings read as woven rather than merely overlapped.
+
+  `entourage-logo.svg` is the vector master; the PNGs and the three copies embedded in the app (header, favicon, apple-touch-icon) are rendered from it. The generator solves for the leaf-tip angle rather than hard-coding the rotation, so Myrcene stays vertical if the geometry is ever retuned.
