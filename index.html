@@ -288,7 +288,7 @@
     <div class="storage-note" style="display:flex;gap:14px;margin-top:8px">
       <button id="exportbtn" style="color:var(--amber-dim);text-decoration:underline;font-family:var(--mono);font-size:9.5px">⬇ Export backup</button>
       <button id="importbtn" style="color:var(--amber-dim);text-decoration:underline;font-family:var(--mono);font-size:9.5px">⬆ Import backup</button>
-      <input type="file" id="importfile" accept="application/json" style="display:none">
+      <input type="file" id="importfile" accept="application/json,text/plain,.json,.txt" style="display:none">
     </div>
     <div class="controls">
       <div class="search-row">
@@ -1549,15 +1549,83 @@ function openManualForm(prefill, reviewIdx){
 }
 
 /* ---------- manual backup: works regardless of storage.set() reliability ---------- */
-document.getElementById('exportbtn').addEventListener('click',()=>{
-  const blob=new Blob([JSON.stringify({active:ACTIVE,archive:ARCHIVE,exported:new Date().toISOString()},null,2)],{type:'application/json'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url; a.download='entourage-backup-'+new Date().toISOString().slice(0,10)+'.json';
-  document.body.appendChild(a); a.click(); a.remove();
-  URL.revokeObjectURL(url);
-  toast('Backup downloaded');
+document.getElementById('exportbtn').addEventListener('click',async ()=>{
+  const json=JSON.stringify({active:ACTIVE,archive:ARCHIVE,exported:new Date().toISOString()},null,2);
+  const name='entourage-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  /* iOS Safari ignores the download attribute on blob URLs - it navigates to the
+     blob instead, and saving from there yields an .html page. The Web Share API
+     hands the file to the share sheet with its real name and type, so
+     "Save to Files" writes a genuine .json. Desktop falls back to the anchor. */
+  try{
+    const file=new File([json],name,{type:'application/json'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){
+      await navigator.share({files:[file],title:name});
+      toast('Backup saved');
+      return;
+    }
+  }catch(err){
+    if(err && err.name==='AbortError') return;   // user dismissed the share sheet
+    dlog('share export failed, falling back to download:',err);
+  }
+  /* Anchor download: works on desktop, silently ignored by iOS Safari. */
+  let anchorWorked=false;
+  try{
+    const blob=new Blob([json],{type:'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    if('download' in a && !IS_IOS){
+      a.href=url; a.download=name; a.rel='noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),10000);
+      anchorWorked=true;
+      toast('Backup downloaded');
+    } else {
+      URL.revokeObjectURL(url);
+    }
+  }catch(err){ dlog('anchor download failed:',err); }
+  /* Last resort - always works, even in a sandboxed iframe with no share
+     permission and no working download attribute. */
+  if(!anchorWorked) showBackupText(json,name);
 });
+
+const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)
+  || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+
+function showBackupText(json,name){
+  const old=document.getElementById('backupdump'); if(old) old.remove();
+  const wrap=document.createElement('div');
+  wrap.id='backupdump';
+  wrap.style.cssText='position:fixed;inset:0;z-index:200;background:rgba(8,6,3,.86);'
+    +'display:flex;align-items:center;justify-content:center;padding:18px;'
+    +'padding-top:calc(18px + env(safe-area-inset-top));padding-bottom:calc(18px + env(safe-area-inset-bottom))';
+  wrap.innerHTML=
+    '<div style="background:var(--card);border:1px solid var(--line);border-radius:16px;'
+    +'max-width:560px;width:100%;max-height:100%;display:flex;flex-direction:column;padding:16px;gap:10px">'
+    +'<div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)">Backup \u2014 '+esc(name)+'</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);line-height:1.45">This device blocked the file download. Copy this text and save it '
+    +'as a <b>.json</b> file (Files app \u2192 new text file, or paste into Notes). Import reads it back.</div>'
+    +'<textarea id="backupdumptext" readonly style="flex:1;min-height:180px;width:100%;box-sizing:border-box;'
+    +'font-family:var(--mono);font-size:11px;line-height:1.4;background:var(--ink-2);color:var(--text);'
+    +'border:1px solid var(--line);border-radius:10px;padding:10px;resize:none"></textarea>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button id="backupcopy" class="ghost-btn" style="flex:1;min-height:44px">Copy all</button>'
+    +'<button id="backupclose" class="ghost-btn" style="flex:1;min-height:44px">Close</button>'
+    +'</div></div>';
+  document.body.appendChild(wrap);
+  document.getElementById('backupdumptext').value=json;
+  document.getElementById('backupclose').addEventListener('click',()=>wrap.remove());
+  document.getElementById('backupcopy').addEventListener('click',async ()=>{
+    const ta=document.getElementById('backupdumptext');
+    try{
+      await navigator.clipboard.writeText(json);
+      toast('Backup copied to clipboard');
+    }catch(err){
+      ta.focus(); ta.setSelectionRange(0,ta.value.length);
+      try{ document.execCommand('copy'); toast('Backup copied'); }
+      catch(e2){ toast('Select the text and copy manually'); }
+    }
+  });
+}
 document.getElementById('importbtn').addEventListener('click',()=>document.getElementById('importfile').click());
 document.getElementById('importfile').addEventListener('change', async (e)=>{
   const file=e.target.files[0]; if(!file) return;
