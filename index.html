@@ -288,6 +288,7 @@
     <div class="storage-note" style="display:flex;gap:14px;margin-top:8px">
       <button id="exportbtn" style="color:var(--amber-dim);text-decoration:underline;font-family:var(--mono);font-size:9.5px">⬇ Export backup</button>
       <button id="importbtn" style="color:var(--amber-dim);text-decoration:underline;font-family:var(--mono);font-size:9.5px">⬆ Import backup</button>
+      <button id="pastebtn" style="color:var(--amber-dim);text-decoration:underline;font-family:var(--mono);font-size:9.5px">✎ Paste JSON</button>
       <input type="file" id="importfile" accept="application/json,text/plain,.json,.txt" style="display:none">
     </div>
     <div class="controls">
@@ -1626,24 +1627,95 @@ function showBackupText(json,name){
     }
   });
 }
+/* Shared by both import routes (file picker and pasted text) so validation,
+   the confirm prompt and the save path are identical either way. */
+async function applyBackupText(text){
+  const parsed=JSON.parse(text);   // caller catches
+  if(!Array.isArray(parsed.active) || !Array.isArray(parsed.archive)) throw new Error('bad format');
+  if(!confirm(`Import ${parsed.active.length} active + ${parsed.archive.length} archived strains? This replaces what's currently loaded.`)) return false;
+  ACTIVE=parsed.active; ARCHIVE=parsed.archive;
+  const ok=await saveActive() && await saveArchive();
+  render(); renderArchive();
+  toast(ok?'Backup imported and saved':'Imported — but could not save to storage this time');
+  return true;
+}
 document.getElementById('importbtn').addEventListener('click',()=>document.getElementById('importfile').click());
 document.getElementById('importfile').addEventListener('change', async (e)=>{
   const file=e.target.files[0]; if(!file) return;
   try{
-    const text=await file.text();
-    const parsed=JSON.parse(text);
-    if(!Array.isArray(parsed.active) || !Array.isArray(parsed.archive)) throw new Error('bad format');
-    if(!confirm(`Import ${parsed.active.length} active + ${parsed.archive.length} archived strains? This replaces what's currently loaded.`)) return;
-    ACTIVE=parsed.active; ARCHIVE=parsed.archive;
-    const ok=await saveActive() && await saveArchive();
-    render(); renderArchive();
-    toast(ok?'Backup imported and saved':'Imported — but could not save to storage this time');
+    await applyBackupText(await file.text());
   }catch(err){
     toast('Could not read that file');
     dlog('backup import failed:', err);
   }
   e.target.value='';
 });
+document.getElementById('pastebtn').addEventListener('click',openPasteImport);
+function openPasteImport(){
+  const old=document.getElementById('pastedump'); if(old) old.remove();
+  const wrap=document.createElement('div');
+  wrap.id='pastedump';
+  wrap.style.cssText='position:fixed;inset:0;z-index:200;background:rgba(8,6,3,.86);'
+    +'display:flex;align-items:center;justify-content:center;padding:18px;'
+    +'padding-top:calc(18px + env(safe-area-inset-top));padding-bottom:calc(18px + env(safe-area-inset-bottom))';
+  wrap.innerHTML=
+    '<div style="background:var(--card);border:1px solid var(--line);border-radius:16px;'
+    +'max-width:560px;width:100%;max-height:100%;display:flex;flex-direction:column;padding:16px;gap:10px">'
+    +'<div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)">Paste backup JSON</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);line-height:1.45">Paste the contents of a backup below, then Import. '
+    +'This replaces what\'s currently loaded.</div>'
+    +'<textarea id="pastedumptext" placeholder=\'{"active":[ ... ],"archive":[ ... ]}\' style="flex:1;min-height:180px;width:100%;box-sizing:border-box;'
+    +'font-family:var(--mono);font-size:11px;line-height:1.4;background:var(--ink-2);color:var(--text);'
+    +'border:1px solid var(--line);border-radius:10px;padding:10px;resize:none"></textarea>'
+    +'<div id="pastedumpmsg" style="font-size:11.5px;color:var(--muted-2);min-height:15px"></div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button id="pastefromclip" class="ghost-btn" style="flex:1;min-height:44px">From clipboard</button>'
+    +'<button id="pastego" class="ghost-btn" style="flex:1;min-height:44px;color:var(--amber);border-color:var(--amber-dim)">Import</button>'
+    +'<button id="pasteclose" class="ghost-btn" style="flex:1;min-height:44px">Cancel</button>'
+    +'</div></div>';
+  document.body.appendChild(wrap);
+  const ta=document.getElementById('pastedumptext');
+  const msg=document.getElementById('pastedumpmsg');
+  const preview=()=>{
+    const v=ta.value.trim();
+    if(!v){ msg.textContent=''; msg.style.color='var(--muted-2)'; return; }
+    try{
+      const p=JSON.parse(v);
+      if(!Array.isArray(p.active)||!Array.isArray(p.archive)) throw 0;
+      msg.textContent=`Looks valid \u2014 ${p.active.length} active, ${p.archive.length} archived`
+        +(p.exported?` \u00b7 exported ${String(p.exported).slice(0,10)}`:'');
+      msg.style.color='var(--sage)';
+    }catch(e){
+      msg.textContent='Not valid backup JSON yet';
+      msg.style.color='var(--berry)';
+    }
+  };
+  ta.addEventListener('input',preview);
+  document.getElementById('pasteclose').addEventListener('click',()=>wrap.remove());
+  document.getElementById('pastefromclip').addEventListener('click',async ()=>{
+    try{
+      ta.value=await navigator.clipboard.readText();
+      preview();
+    }catch(err){
+      msg.textContent='Clipboard blocked here \u2014 paste into the box manually';
+      msg.style.color='var(--berry)';
+      dlog('clipboard read failed:',err);
+    }
+  });
+  document.getElementById('pastego').addEventListener('click',async ()=>{
+    const v=ta.value.trim();
+    if(!v){ msg.textContent='Nothing to import'; msg.style.color='var(--berry)'; return; }
+    try{
+      const done=await applyBackupText(v);
+      if(done) wrap.remove();
+    }catch(err){
+      msg.textContent='Could not read that \u2014 check it is a complete backup';
+      msg.style.color='var(--berry)';
+      dlog('paste import failed:',err);
+    }
+  });
+  setTimeout(()=>ta.focus(),50);
+}
 
 /* ---------- boot ---------- */
 (async function boot(){
