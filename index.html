@@ -286,9 +286,8 @@
       <b>2.</b> Or use <b>Export backup</b> before closing and <b>Import backup</b> when you reopen.
     </div>
     <div class="storage-note" style="display:flex;gap:14px;margin-top:8px">
-      <button id="exportbtn" style="color:var(--amber-dim);text-decoration:underline;font-family:var(--mono);font-size:9.5px">⬇ Export backup</button>
-      <button id="importbtn" style="color:var(--amber-dim);text-decoration:underline;font-family:var(--mono);font-size:9.5px">⬆ Import backup</button>
-      <button id="pastebtn" style="color:var(--amber-dim);text-decoration:underline;font-family:var(--mono);font-size:9.5px">✎ Paste JSON</button>
+      <button id="exportbtn" style="color:var(--amber-dim);text-decoration:underline;font-family:var(--mono);font-size:9.5px">⬇ Export JSON</button>
+      <button id="importbtn" style="color:var(--amber-dim);text-decoration:underline;font-family:var(--mono);font-size:9.5px">⬆ Import JSON</button>
       <input type="file" id="importfile" accept="application/json,text/plain,.json,.txt" style="display:none">
     </div>
     <div class="controls">
@@ -960,7 +959,9 @@ function match(d){
   }
   if(!(state.efMin===0&&state.efMax===100)){
     const e=effLeanOf(d);
-    if(e==null||e<state.efMin||e>state.efMax) return false;
+    /* e==null means no terpene data (most edibles). Unknown is not the same as
+       out-of-range, so those stay visible rather than vanishing silently. */
+    if(e!=null && (e<state.efMin||e>state.efMax)) return false;
   }
   if(state.q){
     const hay=(d.name+' '+(d.gen||'')+' '+(d.eff||'')+' '+(d.research||'')+' '+(d.type||'')+' '+(d.cls||'')).toLowerCase();
@@ -1026,12 +1027,38 @@ function visibleSectionIds(){return SECTIONS.filter(s=>state.cat==='any'||s.id==
 function syncFoldBtn(){const ids=visibleSectionIds();const allCol=ids.length&&ids.every(id=>collapsed[id]);document.getElementById('foldall').textContent=allCol?'Expand all':'Collapse all';}
 document.getElementById('foldall').addEventListener('click',()=>{const ids=visibleSectionIds();const allCol=ids.every(id=>collapsed[id]);ids.forEach(id=>collapsed[id]=!allCol);render();});
 
+/* Slider presets are derived from the inventory rather than hard-coded, so a goal
+   always spans the range its own items actually occupy - it can never tune the
+   sliders to a window that filters everything out, and it re-calibrates as stock
+   changes. Padded by one step so the edges aren't razor-tight. */
+function goalSliderRange(goal){
+  if(goal==='any') return {ef:[0,100], ip:[0,100]};
+  const pool=ACTIVE.filter(d=>(d.goals||[]).includes(goal));
+  const span=(vals)=>{
+    if(!vals.length) return [0,100];
+    const lo=Math.max(0,Math.round((Math.min.apply(null,vals)-5)/5)*5);
+    const hi=Math.min(100,Math.round((Math.max.apply(null,vals)+5)/5)*5);
+    return [lo,hi];
+  };
+  return {
+    ef: span(pool.map(effLeanOf).filter(v=>v!=null)),
+    ip: span(pool.map(d=>d.ipct).filter(v=>v!=null))
+  };
+}
+function applyGoalSliders(goal){
+  const r=goalSliderRange(goal);
+  ipmin.value=r.ip[0]; ipmax.value=r.ip[1];
+  efmin.value=r.ef[0]; efmax.value=r.ef[1];
+  syncSlider(true); syncEfSlider(true);
+}
 function wireChips(id,key){
   document.getElementById(id).addEventListener('click',e=>{
     const b=e.target.closest('[data-'+key+']'); if(!b) return;
     state[key]=b.dataset[key];
     document.querySelectorAll(`#${id} [data-${key}]`).forEach(c=>{c.classList.remove('on');c.setAttribute&&c.setAttribute('aria-selected','false');});
-    b.classList.add('on'); b.setAttribute('aria-selected','true'); render();
+    b.classList.add('on'); b.setAttribute('aria-selected','true');
+    if(key==='goal') applyGoalSliders(state.goal);
+    render();
   });
 }
 wireChips('where','where');wireChips('goal','goal');wireChips('cat','cat');
@@ -1058,7 +1085,7 @@ function ipLabel(lo,hi){
   const a=band(lo),b=band(hi);
   return (a===b?a:`${a} \u2192 ${b}`)+`  (${lo}\u2013${hi}% indica)`;
 }
-function syncSlider(){
+function syncSlider(quiet){
   let lo=+ipmin.value, hi=+ipmax.value;
   if(lo>hi){ [lo,hi]=[hi,lo]; }
   state.ipMin=lo; state.ipMax=hi;
@@ -1069,7 +1096,7 @@ function syncSlider(){
   const fill=document.getElementById('sliderfill');
   if(hi<=lo){ sliderrange.style.width='2px'; fill.style.width='100%'; fill.style.left='0'; }
   else { const span=hi-lo; fill.style.width=(100/span*100)+'%'; fill.style.left=(-lo/span*100)+'%'; }
-  render();
+  if(!quiet) render();
 }
 ipmin.addEventListener('input',syncSlider);
 ipmax.addEventListener('input',syncSlider);
@@ -1080,7 +1107,7 @@ function efLabel(lo,hi){
   const a=band(lo),b=band(hi);
   return (a===b?a:`${a} \u2192 ${b}`)+`  (${lo}\u2013${hi}% sedating)`;
 }
-function syncEfSlider(){
+function syncEfSlider(quiet){
   let lo=+efmin.value, hi=+efmax.value;
   if(lo>hi){ [lo,hi]=[hi,lo]; }
   state.efMin=lo; state.efMax=hi;
@@ -1090,7 +1117,7 @@ function syncEfSlider(){
   efreadout.style.color= full ?'var(--muted-2)':'var(--amber)';
   if(hi<=lo){ efrange.style.width='2px'; effill.style.width='100%'; effill.style.left='0'; }
   else { const span=hi-lo; effill.style.width=(100/span*100)+'%'; effill.style.left=(-lo/span*100)+'%'; }
-  render();
+  if(!quiet) render();
 }
 efmin.addEventListener('input',syncEfSlider);
 efmax.addEventListener('input',syncEfSlider);
@@ -1550,9 +1577,30 @@ function openManualForm(prefill, reviewIdx){
 }
 
 /* ---------- manual backup: works regardless of storage.set() reliability ---------- */
-document.getElementById('exportbtn').addEventListener('click',async ()=>{
-  const json=JSON.stringify({active:ACTIVE,archive:ARCHIVE,exported:new Date().toISOString()},null,2);
-  const name='entourage-backup-'+new Date().toISOString().slice(0,10)+'.json';
+function backupJSON(){ return JSON.stringify({active:ACTIVE,archive:ARCHIVE,exported:new Date().toISOString()},null,2); }
+function backupName(){ return 'entourage-backup-'+new Date().toISOString().slice(0,10)+'.json'; }
+
+document.getElementById('exportbtn').addEventListener('click',()=>{
+  openChooser('Export JSON','Save a full copy of your inventory \u2014 active and archive.',[
+    {label:'Save as file', hint:'Share sheet \u2192 Save to Files', fn:exportAsFile},
+    {label:'Copy to clipboard', hint:'Paste anywhere', fn:exportToClipboard}
+  ]);
+});
+
+async function exportToClipboard(){
+  const json=backupJSON();
+  try{
+    await navigator.clipboard.writeText(json);
+    toast('Backup copied to clipboard');
+  }catch(err){
+    dlog('clipboard export failed:',err);
+    showBackupText(json,backupName());   // manual select-and-copy fallback
+  }
+}
+
+async function exportAsFile(){
+  const json=backupJSON();
+  const name=backupName();
   /* iOS Safari ignores the download attribute on blob URLs - it navigates to the
      blob instead, and saving from there yields an .html page. The Web Share API
      hands the file to the share sheet with its real name and type, so
@@ -1587,7 +1635,7 @@ document.getElementById('exportbtn').addEventListener('click',async ()=>{
   /* Last resort - always works, even in a sandboxed iframe with no share
      permission and no working download attribute. */
   if(!anchorWorked) showBackupText(json,name);
-});
+}
 
 const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)
   || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
@@ -1639,7 +1687,12 @@ async function applyBackupText(text){
   toast(ok?'Backup imported and saved':'Imported — but could not save to storage this time');
   return true;
 }
-document.getElementById('importbtn').addEventListener('click',()=>document.getElementById('importfile').click());
+document.getElementById('importbtn').addEventListener('click',()=>{
+  openChooser('Import JSON','Replaces everything currently loaded.',[
+    {label:'Choose file', hint:'.json or .txt backup', fn:()=>document.getElementById('importfile').click()},
+    {label:'Paste JSON', hint:'From clipboard or typed', fn:openPasteImport}
+  ]);
+});
 document.getElementById('importfile').addEventListener('change', async (e)=>{
   const file=e.target.files[0]; if(!file) return;
   try{
@@ -1650,7 +1703,34 @@ document.getElementById('importfile').addEventListener('change', async (e)=>{
   }
   e.target.value='';
 });
-document.getElementById('pastebtn').addEventListener('click',openPasteImport);
+
+/* Small two-option chooser shared by Export JSON and Import JSON. Each option's
+   fn() runs synchronously from the click so it still counts as a user gesture -
+   required for navigator.share and clipboard access. */
+function openChooser(title,desc,options){
+  const old=document.getElementById('chooser'); if(old) old.remove();
+  const wrap=document.createElement('div');
+  wrap.id='chooser';
+  wrap.style.cssText='position:fixed;inset:0;z-index:200;background:rgba(8,6,3,.86);'
+    +'display:flex;align-items:center;justify-content:center;padding:18px;'
+    +'padding-top:calc(18px + env(safe-area-inset-top));padding-bottom:calc(18px + env(safe-area-inset-bottom))';
+  wrap.innerHTML=
+    '<div style="background:var(--card);border:1px solid var(--line);border-radius:16px;'
+    +'max-width:420px;width:100%;display:flex;flex-direction:column;padding:16px;gap:10px">'
+    +'<div style="font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--amber)">'+esc(title)+'</div>'
+    +'<div style="font-size:12.5px;color:var(--muted);line-height:1.45">'+esc(desc)+'</div>'
+    +options.map((o,i)=>'<button id="chooseopt'+i+'" class="ghost-btn" style="min-height:52px;display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;padding:9px 13px">'
+       +'<span style="font-size:14px;color:var(--text)">'+esc(o.label)+'</span>'
+       +'<span style="font-size:11px;color:var(--muted-2)">'+esc(o.hint||'')+'</span></button>').join('')
+    +'<button id="choosecancel" class="ghost-btn" style="min-height:44px">Cancel</button>'
+    +'</div>';
+  document.body.appendChild(wrap);
+  options.forEach((o,i)=>{
+    document.getElementById('chooseopt'+i).addEventListener('click',()=>{ wrap.remove(); o.fn(); });
+  });
+  document.getElementById('choosecancel').addEventListener('click',()=>wrap.remove());
+  wrap.addEventListener('click',e=>{ if(e.target===wrap) wrap.remove(); });
+}
 function openPasteImport(){
   const old=document.getElementById('pastedump'); if(old) old.remove();
   const wrap=document.createElement('div');
