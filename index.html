@@ -953,7 +953,12 @@ document.addEventListener('click', e=>{
 /* ---------- filtering / rendering ---------- */
 function match(d){
   if(state.where==='togo' && !isPortable(d)) return false;
-  if(state.goal!=='any' && !(d.goals||[]).includes(state.goal)) return false;
+  /* Goals drive the Effect slider now, not tag matching. Items that have terpene
+     data are judged purely on where they land on the axis. Items with no terpene
+     data (most edibles) can't be placed on it at all, so for those - and only
+     those - the stored goal tags still apply, rather than having them surface
+     under every goal. */
+  if(state.goal!=='any' && effLeanOf(d)==null && !(d.goals||[]).includes(state.goal)) return false;
   if(d.ipct!=null && !(state.ipMin===0&&state.ipMax===100)){
     if(d.ipct<state.ipMin||d.ipct>state.ipMax) return false;
   }
@@ -1031,19 +1036,28 @@ document.getElementById('foldall').addEventListener('click',()=>{const ids=visib
    always spans the range its own items actually occupy - it can never tune the
    sliders to a window that filters everything out, and it re-calibrates as stock
    changes. Padded by one step so the edges aren't razor-tight. */
+/* Goal presets are percentiles of the inventory's own Effect distribution, so each
+   goal always lands on a real slice of what you actually own and re-calibrates as
+   stock turns over. Lineage is left wide - it's a dispensary label, not an effect,
+   so a goal shouldn't narrow it. */
+const GOAL_BANDS={
+  sleep:   {from:0.65},
+  evening: {from:0.35},
+  pain:    {from:0.60},
+  social:  {to:0.65},
+  focus:   {to:0.40}
+};
 function goalSliderRange(goal){
-  if(goal==='any') return {ef:[0,100], ip:[0,100]};
-  const pool=ACTIVE.filter(d=>(d.goals||[]).includes(goal));
-  const span=(vals)=>{
-    if(!vals.length) return [0,100];
-    const lo=Math.max(0,Math.round((Math.min.apply(null,vals)-5)/5)*5);
-    const hi=Math.min(100,Math.round((Math.max.apply(null,vals)+5)/5)*5);
-    return [lo,hi];
+  const band=GOAL_BANDS[goal];
+  if(goal==='any'||!band) return {ef:[0,100], ip:[0,100]};
+  const vals=ACTIVE.map(effLeanOf).filter(v=>v!=null).sort((a,b)=>a-b);
+  if(!vals.length) return {ef:[0,100], ip:[0,100]};
+  const pct=(f)=>{
+    const v=vals[Math.min(vals.length-1,Math.max(0,Math.round(f*(vals.length-1))))];
+    return Math.max(0,Math.min(100,Math.round(v/5)*5));
   };
-  return {
-    ef: span(pool.map(effLeanOf).filter(v=>v!=null)),
-    ip: span(pool.map(d=>d.ipct).filter(v=>v!=null))
-  };
+  const ef = band.from!=null ? [pct(band.from),100] : [0,pct(band.to)];
+  return {ef, ip:[0,100]};
 }
 function applyGoalSliders(goal){
   const r=goalSliderRange(goal);
@@ -1379,6 +1393,7 @@ const TERP_LEAN_WEIGHTS={
   '3-Carene':           {w:-0.15, c:1},
   'alpha-Phellandrene': {w:-0.30, c:1}
 };
+const CAL_MID=0.15, CAL_GAIN=90;
 function computeLeanFromTerps(terps){
   let num=0,den=0,strongMass=0;
   const contrib=[];
@@ -1391,7 +1406,13 @@ function computeLeanFromTerps(terps){
     }
   });
   if(!den) return null;
-  const ipct=Math.max(0,Math.min(100,Math.round((50+(num/den)*50)/5)*5));
+  /* Calibration: raw weighted scores for real cannabis products cluster in a narrow
+     positive band (~0.08-0.50) because Caryophyllene dominates by mass in most
+     extracts. Mapping the theoretical weight range straight to 0-100 squashed
+     everything into 55-75%. CAL_MID recentres on the middle of that real band and
+     CAL_GAIN opens the spread, so the number reads relative to typical products
+     rather than to terpene extremes that never occur. */
+  const ipct=Math.max(0,Math.min(100,Math.round((50+(num/den-CAL_MID)*CAL_GAIN)/5)*5));
   const cls= ipct>=65?'indica': ipct<=35?'sativa':'hybrid';
   contrib.sort((a,b)=>b.pull-a.pull);
   const drivers=contrib.slice(0,2).map(c=>c.name);
