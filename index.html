@@ -310,10 +310,11 @@
       <b>1.</b> Open this link in <b>Safari</b> → Share → <b>Add to Home Screen</b>. The app saves to your device there — that's the real install.<br>
       <b>2.</b> Or use <b>Export JSON</b> before closing and <b>Import JSON</b> when you reopen.
     </div>
-    <div class="storage-note" style="display:flex;gap:14px;margin-top:8px">
+    <div class="storage-note" style="display:flex;align-items:center;gap:14px;margin-top:8px">
       <button id="exportbtn" style="color:var(--amber-dim);text-decoration:underline;font-size:12px">Export JSON</button>
       <button id="importbtn" style="color:var(--amber-dim);text-decoration:underline;font-size:12px">Import JSON</button>
       <button id="claudebtn" style="color:var(--amber-dim);text-decoration:underline;font-size:12px">Copy for Claude</button>
+      <button id="askbtn" style="color:var(--amber-dim);text-decoration:underline;font-size:12px;min-height:44px">Ask</button>
       <input type="file" id="importfile" accept="application/json,text/plain,.json,.txt" style="display:none">
     </div>
     <button class="pick-btn" id="pickbtn">Tonight’s pick</button>
@@ -1319,12 +1320,14 @@ function openCoaUpload(){
       <div class="fd-sub">PDF or photo, one or many at once. Claude extracts THC/CBD/terpenes automatically.</div>
       <input type="file" id="coafiles" accept="application/pdf,image/*" multiple>
     </div>
+    <button class="ghost-btn" id="pastecoa" style="min-height:44px">📋 Paste COA (from the Entourage COA shortcut)</button>
     <div id="coastatus"></div>
     <div id="coareview"></div>
     <button class="ghost-btn" id="backtoadd">\u2190 Back</button>`;
   document.getElementById('sheetclose').addEventListener('click',closeSheet);
   document.getElementById('backtoadd').addEventListener('click',openAddSheet);
   document.getElementById('coafiles').addEventListener('change',handleCoaFiles);
+  document.getElementById('pastecoa').addEventListener('click',pasteCoaFromClipboard);
 }
 
 function fileToBase64(file){
@@ -1398,6 +1401,30 @@ async function handleCoaFiles(e){
   statusEl.innerHTML=`<div class="parsing-status" style="color:var(--sage)">\u2713 Done \u2014 review below before saving</div>`;
   renderReview();
   e.target.value='';
+}
+
+async function pasteCoaFromClipboard(){
+  const statusEl=document.getElementById('coastatus');
+  const fail=msg=>{ statusEl.innerHTML=`<div class="parsing-status" style="color:var(--berry)">${esc(msg)}</div>`; };
+  let text;
+  try{ text=await navigator.clipboard.readText(); }
+  catch(err){ dlog('clipboard read failed:',err); return fail("Couldn't read the clipboard. Allow Paste when iOS asks, or run the Entourage COA shortcut first."); }
+  let parsed;
+  try{ parsed=JSON.parse(String(text||'').replace(/```json|```/g,'').trim()); }
+  catch(err){ dlog('pasted COA is not JSON:',err); return fail("The clipboard doesn't hold COA JSON. Run the Entourage COA shortcut on the COA, then tap Paste COA again."); }
+  if(!parsed || typeof parsed!=='object' || Array.isArray(parsed)) return fail("The clipboard doesn't hold COA JSON. Run the Entourage COA shortcut on the COA, then tap Paste COA again.");
+  if(typeof parsed.name!=='string' || !parsed.name.trim()) return fail('Pasted COA has no strain name. Nothing was added.');
+  if(!Array.isArray(parsed.terpenes)) return fail('Pasted COA has no terpenes list. Nothing was added.');
+  const terps=[];
+  for(const t of parsed.terpenes){
+    const pct=(t && typeof t.pct==='string') ? Number(t.pct.replace('%','').trim()) : (t ? t.pct : undefined);
+    if(!t || typeof t.name!=='string' || !t.name.trim() || typeof pct!=='number' || !isFinite(pct)) return fail('Pasted COA has a terpene entry without a name or a numeric percent. Nothing was added.');
+    terps.push({name:normalizeTerpName(t.name), pct});
+  }
+  parsed.terpenes=terps;
+  pendingReview.push({ok:true, data:parsed, file:'Pasted COA'});
+  statusEl.innerHTML=`<div class="parsing-status" style="color:var(--sage)">✓ Pasted — review below before saving</div>`;
+  renderReview();
 }
 
 function renderReview(){
@@ -2186,7 +2213,20 @@ async function copyForClaude(ctx){
   try{ await navigator.clipboard.writeText(txt); toast('Summary copied. Paste it into Claude'); }
   catch(err){ dlog('clipboard write failed:',err); showCopyPanel('Summary for Claude','Clipboard access is blocked here. Copy this and paste it into your chat.',txt); }
 }
+async function askViaShortcut(){
+  const q=prompt('Ask about what’s in stock:');
+  if(q==null || !q.trim()) return;
+  const txt=buildClaudeSummary(null)+'\n\nQuestion: '+q.trim();
+  try{ await navigator.clipboard.writeText(txt); }
+  catch(err){
+    dlog('clipboard write failed:',err);
+    showCopyPanel('Ask','Clipboard access is blocked here, so the Entourage Ask shortcut can’t be started from the app. Copy this, then run the shortcut yourself.',txt);
+    return;
+  }
+  location.href='shortcuts://run-shortcut?name=Entourage%20Ask&input=clipboard';
+}
 document.getElementById('claudebtn').addEventListener('click',()=>copyForClaude(null));
+document.getElementById('askbtn').addEventListener('click',askViaShortcut);
 document.getElementById('pickbtn').addEventListener('click',openPickSheet);
 
 (async function boot(){

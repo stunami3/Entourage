@@ -31,9 +31,11 @@ Copyright © 2026 stunami3. All Rights Reserved. Personal-use software; do not r
 - **Lifecycle.** Finish opens a short “how was it?” step — optional stars and a one-line note — then archives with the date. The archive keeps a full snapshot of the product, including its terpene profile and session log, so Restore brings it back exactly as it was. (Entries archived before snapshots existed kept only name, THC, and effects; restoring those still needs details filled in.) Archive is browsable via toggle.
 - **Add products** via the + button:
   - **Scan COA** — upload a COA PDF or photo; Claude reads it and returns structured data (name, brand, type, size, THC, CBD, total terps, full terpene list, other cannabinoids, batch date, lab) for your review before anything is added. *Only works when the app runs inside Claude (published artifact or chat preview) — see Hosting below.*
+  - **Paste COA** — on the self-hosted app, share a COA to the **Entourage COA** shortcut (Apple Intelligence), then tap Paste COA in the Scan COA sheet. The app reads the JSON the shortcut left on the clipboard and shows the same review card as Scan COA. Clipboard contents without a strain name or a terpenes list are rejected with an error; nothing partial is added. See **Apple Intelligence via Shortcuts** below.
   - **Manual entry** — works everywhere. All 23 terpenes COAs commonly report are enterable (the 7 majors up front, the rest behind a "More terpenes" toggle), plus lineage, abbreviation, and every other field. The Effect slider position calculates live as you type.
 - **Export / Import JSON** — full inventory, for safekeeping or moving between installs. Export saves a file or copies to the clipboard; Import takes a file or pasted text.
 - **Copy for Claude.** A compact plain-text summary of what’s actually in stock right now — COA numbers, effect scores, ratings, session history, and recent finishes with their notes — for pasting into a chat when you want a second opinion. From inside Tonight’s pick it also includes your answers to the six questions. This exists because the app’s live data lives on your device, so anything reasoning from an older copy of the inventory will recommend products you’ve already finished.
+- **Ask.** Type a question; the app copies the same in-stock summary as Copy for Claude plus your question to the clipboard and opens the **Entourage Ask** shortcut, which answers with Apple Intelligence. See **Apple Intelligence via Shortcuts** below.
 
 ## How index.html is generated
 
@@ -48,7 +50,7 @@ Two ways to run it. They have different tradeoffs:
 | | Published on Claude | Self-hosted (GitHub Pages etc.) |
 |---|---|---|
 | Opens as standalone app from Home Screen | No — wrapped in Claude site chrome | **Yes** |
-| COA scanning (AI) | **Yes** | No — manual entry only |
+| COA scanning (AI) | **Yes** | Via the Entourage COA shortcut + Paste COA (Apple Intelligence iPhone) |
 | Storage | Claude account (syncs across your devices) or device, depending on where it runs | This device only (localStorage) |
 | URL | claude.ai public link | Your own clean URL |
 
@@ -64,6 +66,63 @@ Two ways to run it. They have different tradeoffs:
 8. Do your backup **Import inside the home-screen app** (see Storage below for why).
 
 **Updating:** upload a new `index.html` to the repo — same name replaces the old one. Your data survives updates (it's stored on the device, keyed to the domain, not in the file). If the app icon artwork ever changes, delete and re-add the Home Screen shortcut; iOS caches icons.
+
+## Apple Intelligence via Shortcuts
+
+Two shortcuts give the self-hosted app AI features without any API key: **Entourage COA** turns a COA into the JSON that Paste COA reads, and **Entourage Ask** answers questions about what's in stock. Both run Apple's model on Private Cloud Compute.
+
+**Requirements:** iOS 26 or later on an iPhone that supports Apple Intelligence, with Apple Intelligence turned on (Settings → Apple Intelligence & Siri). Action names below are as Apple documents them; if a label on your phone reads slightly differently, search the action list for the key word (e.g. "Model", "Extract Text").
+
+The shortcut names must match exactly — the app opens `shortcuts://run-shortcut?name=Entourage%20Ask&input=clipboard`, so a shortcut named anything other than `Entourage Ask` won't be found.
+
+### Entourage COA
+
+1. Open **Shortcuts** → **+** (new shortcut). Tap the name at the top → **Rename** → `Entourage COA`.
+2. Tap the **ⓘ** (Details) button → turn on **Show in Share Sheet** → Done. A **Receive** block appears at the top. Tap its input types and leave only **Images** and **PDFs** selected. Set "If there's no input" to **Stop and Respond**.
+3. Add **Get Details of Files**. Set it to get **File Extension** of **Shortcut Input**.
+4. Add **If**. Condition: **File Extension** **is** `pdf`.
+5. Inside the **If** branch, add **Get Text from Input** with **Shortcut Input** as its input.
+6. Inside the **Otherwise** branch, add **Extract Text from Image** with **Shortcut Input** as its input.
+7. After **End If**, add a **Text** action. Paste the prompt below into it, then on a new line after it type `COA text:` and insert the **If Result** variable after that.
+8. Add **Use Model**. Choose **Private Cloud Compute** as the model. Set its request to the **Text** from step 7. (If the action offers a Follow Up option, leave it off.)
+9. Add **Copy to Clipboard**. Its input should be the output of Use Model (Shortcuts usually fills this in; if not, tap the input and pick the Use Model variable).
+10. Optional: add **Show Notification** with `COA copied — open Entourage and tap Paste COA`.
+
+To use it: open the COA (PDF in Files/Mail, or a photo) → Share → **Entourage COA**. Then open Entourage from its Home Screen icon → **+** → **Scan COA** → **Paste COA**, and review the card before adding. iOS will ask to allow pasting; tap **Allow Paste**.
+
+A scanned PDF with no text layer produces no text at step 5. If that happens, screenshot the COA page and share the screenshot instead, so step 6 reads it.
+
+The prompt to paste in step 7 (identical to the one the app's built-in Scan COA uses):
+
+```
+You are extracting data from a cannabis Certificate of Analysis (COA). Read the document and output ONLY a single JSON object — no markdown fences, no explanation, nothing else. Schema:
+{
+ "name": strain/cultivar name as shown,
+ "brand": brand or product line (e.g. MPX, The Vault, Sunshine State, Curaleaf, GrowHealthy),
+ "productType": one of "cart","jar","flower","edible","distillate" (infer from product description — "Live Rosin"/"Rosin"/"Derivative" in a small jar format = jar, in a cartridge = cart, "Whole Flower" = flower, gummy/chocolate/RSO edible = edible),
+ "size": e.g. "0.5g", "1g", "3.5g",
+ "thc": Total THC percent as shown, e.g. "72.8%",
+ "cbd": Total CBD percent as shown, e.g. "0.147%" (or null if not tested/shown),
+ "totalTerps": Total Terpenes percent as shown, e.g. "6.79%" (or null if not tested),
+ "terpenes": array of {"name":.., "pct":number} for every individual terpene with a positive percent value. Use these exact names when the terpene matches (strip d-/l-/beta- prefixes only for these four): Myrcene, Limonene, Caryophyllene, Linalool. For all other terpenes keep standard naming e.g. Humulene, Farnesene, Guaiol, Bisabolol, Ocimene, trans-Nerolidol, cis-Nerolidol, alpha-Pinene, beta-Pinene, alpha-Phellandrene, alpha-Terpineol, Fenchyl Alcohol, Camphene, Caryophyllene Oxide, alpha-Terpinolene, Borneol, Fenchone, alpha-Cedrene, 3-Carene.
+ "otherCannabinoids": short string summarizing notable minor cannabinoids e.g. "CBGa 5.04%, THCV 0.574%" (or empty string),
+ "batchDate": batch date as MM/DD/YY if shown, else null,
+ "lab": testing lab name if shown,
+ "cultivator": cultivation facility if shown
+}
+If a field is not present in the document, use null (or empty array for terpenes). Output nothing except the JSON object.
+```
+
+Paste COA tolerates the model wrapping its answer in ```` ```json ```` fences, lab-style terpene names (`beta-Myrcene`, `d-Limonene`, …, normalized the same way as Scan COA), and percents given as text (`"0.8%"`). It rejects anything without a strain name or a terpenes list, or with a terpene entry missing a name or a numeric percent. Always check the review card against the COA: an AI read of a lab sheet can be wrong.
+
+### Entourage Ask
+
+1. Open **Shortcuts** → **+**. Rename it to `Entourage Ask` (exact spelling and capitalization).
+2. Add **Get Clipboard**.
+3. Add **Use Model**. Choose **Private Cloud Compute**. Set its request to the **Clipboard** from step 2.
+4. Add **Show Result** with the output of Use Model as its input.
+
+To use it: in Entourage tap **Ask**, type your question, and tap OK. The app copies the in-stock summary plus your question to the clipboard and opens the shortcut, which shows the answer. If the app can't write to the clipboard, it shows the text in a panel instead so you can copy it and run the shortcut yourself.
 
 ## Storage — how it actually works
 
