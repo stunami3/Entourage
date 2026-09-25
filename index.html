@@ -242,7 +242,7 @@
   .add-choice .ac-sub{font-size:12.5px;color:var(--muted);margin-top:5px;line-height:1.4}
   .field-label{font-size:12.5px;color:var(--muted);margin:14px 0 6px}
   .field-label:first-child{margin-top:0}
-  .finput{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px 13px;font-size:15px}
+  .finput{width:100%;background:var(--ink);border:1px solid var(--line);border-radius:10px;color:var(--text);padding:11px 13px;font-size:16px}
   .finput:focus{outline:2px solid var(--amber-dim);outline-offset:1px;border-color:transparent}
   .terp-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:2px}
   .terp-grid .tg-cell label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
@@ -2219,7 +2219,7 @@ function openAskSheet(){
     <div class="sheet-top"><div><h2 style="font-size:20px">Ask</h2>
       <div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.45">Sends what’s in stock plus your question to the Entourage Ask shortcut.</div></div>
       <button class="close" id="sheetclose" aria-label="Close">×</button></div>
-    <input class="finput" id="askq" type="text" enterkeyhint="send" autocomplete="off" placeholder="e.g. What helps me sleep tonight?" style="margin-top:14px;font-size:16px;min-height:44px">
+    <input class="finput" id="askq" type="text" enterkeyhint="send" autocomplete="off" placeholder="e.g. What helps me sleep tonight?" style="margin-top:14px;min-height:44px">
     <button class="primary-btn" id="askgo">Ask</button>
     <button class="ghost-btn" id="askcancel" style="min-height:44px">Cancel</button>`;
   sheet.dataset.item='';
