@@ -1320,6 +1320,7 @@ function openCoaUpload(){
       <div class="fd-sub">PDF or photo, one or many at once. Claude extracts THC/CBD/terpenes automatically.</div>
       <input type="file" id="coafiles" accept="application/pdf,image/*" multiple>
     </div>
+    <button class="ghost-btn" id="opencoa" style="min-height:44px">📲 Open Entourage COA shortcut</button>
     <button class="ghost-btn" id="pastecoa" style="min-height:44px">📋 Paste COA (from the Entourage COA shortcut)</button>
     <div id="coastatus"></div>
     <div id="coareview"></div>
@@ -1327,6 +1328,7 @@ function openCoaUpload(){
   document.getElementById('sheetclose').addEventListener('click',closeSheet);
   document.getElementById('backtoadd').addEventListener('click',openAddSheet);
   document.getElementById('coafiles').addEventListener('change',handleCoaFiles);
+  document.getElementById('opencoa').addEventListener('click',()=>{ location.href='shortcuts://run-shortcut?name=Entourage%20COA'; });
   document.getElementById('pastecoa').addEventListener('click',pasteCoaFromClipboard);
 }
 
@@ -2243,11 +2245,13 @@ function sendAsk(){
   catch(err){ write=Promise.reject(err); }
   write.then(()=>{
     closeSheet();
-    location.href='shortcuts://run-shortcut?name=Entourage%20Ask&input=clipboard';
-  }).catch(err=>{
+    try{ location.href='shortcuts://run-shortcut?name=Entourage%20Ask&input=clipboard'; }
+    catch(err){ dlog('opening shortcut failed:',err); toast('Copied. Run the Entourage Ask shortcut for the answer.'); }
+  }, err=>{
     dlog('clipboard write failed:',err);
     closeSheet();
-    showCopyPanel('Ask','Clipboard access is blocked here, so the Entourage Ask shortcut can’t be started from the app. Copy this, then run the shortcut yourself.',txt);
+    const why=err ? ` [${err.name||'Error'}${err.message?': '+err.message:''}]` : '';
+    showCopyPanel('Ask','Clipboard access is blocked here, so the Entourage Ask shortcut can’t be started from the app. Copy this, then run the shortcut yourself.'+why,txt);
   });
 }
 document.getElementById('claudebtn').addEventListener('click',()=>copyForClaude(null));

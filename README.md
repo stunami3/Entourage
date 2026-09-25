@@ -31,7 +31,7 @@ Copyright © 2026 stunami3. All Rights Reserved. Personal-use software; do not r
 - **Lifecycle.** Finish opens a short “how was it?” step — optional stars and a one-line note — then archives with the date. The archive keeps a full snapshot of the product, including its terpene profile and session log, so Restore brings it back exactly as it was. (Entries archived before snapshots existed kept only name, THC, and effects; restoring those still needs details filled in.) Archive is browsable via toggle.
 - **Add products** via the + button:
   - **Scan COA** — upload a COA PDF or photo; Claude reads it and returns structured data (name, brand, type, size, THC, CBD, total terps, full terpene list, other cannabinoids, batch date, lab) for your review before anything is added. *Only works when the app runs inside Claude (published artifact or chat preview) — see Hosting below.*
-  - **Paste COA** — on the self-hosted app, share a COA to the **Entourage COA** shortcut (Apple Intelligence), then tap Paste COA in the Scan COA sheet. The app reads the JSON the shortcut left on the clipboard and shows the same review card as Scan COA. Clipboard contents without a strain name or a terpenes list are rejected with an error; nothing partial is added. See **Apple Intelligence via Shortcuts** below.
+  - **Paste COA** — on the self-hosted app, run the **Entourage COA** shortcut (Apple Intelligence) on a COA — share the COA to it, or tap **Open Entourage COA** in the Scan COA sheet and pick the photo or file — then tap Paste COA in the Scan COA sheet. The app reads the JSON the shortcut left on the clipboard and shows the same review card as Scan COA. Clipboard contents without a strain name or a terpenes list are rejected with an error; nothing partial is added. See **Apple Intelligence via Shortcuts** below.
   - **Manual entry** — works everywhere. All 23 terpenes COAs commonly report are enterable (the 7 majors up front, the rest behind a "More terpenes" toggle), plus lineage, abbreviation, and every other field. The Effect slider position calculates live as you type.
 - **Export / Import JSON** — full inventory, for safekeeping or moving between installs. Export saves a file or copies to the clipboard; Import takes a file or pasted text.
 - **Copy for Claude.** A compact plain-text summary of what’s actually in stock right now — COA numbers, effect scores, ratings, session history, and recent finishes with their notes — for pasting into a chat when you want a second opinion. From inside Tonight’s pick it also includes your answers to the six questions. This exists because the app’s live data lives on your device, so anything reasoning from an older copy of the inventory will recommend products you’ve already finished.
@@ -73,24 +73,36 @@ Two shortcuts give the self-hosted app AI features without any API key: **Entour
 
 **Requirements:** iOS 26 or later on an iPhone that supports Apple Intelligence, with Apple Intelligence turned on (Settings → Apple Intelligence & Siri). Action names below are as Apple documents them; if a label on your phone reads slightly differently, search the action list for the key word (e.g. "Model", "Extract Text").
 
-The shortcut names must match exactly — the app opens `shortcuts://run-shortcut?name=Entourage%20Ask&input=clipboard`, so a shortcut named anything other than `Entourage Ask` won't be found.
+The shortcut names must match exactly — the app opens `shortcuts://run-shortcut?name=Entourage%20COA` and `shortcuts://run-shortcut?name=Entourage%20Ask&input=clipboard`, so shortcuts named anything other than `Entourage COA` and `Entourage Ask` won't be found.
 
 ### Entourage COA
 
+The shortcut works two ways: with a COA already attached (from the Share Sheet), or with nothing attached (from the app's **Open Entourage COA** button, the Shortcuts app, or Siri), in which case it asks you to pick a photo or a file first.
+
 1. Open **Shortcuts** → **+** (new shortcut). Tap the name at the top → **Rename** → `Entourage COA`.
-2. Tap the **ⓘ** (Details) button → turn on **Show in Share Sheet** → Done. A **Receive** block appears at the top. Tap its input types and leave only **Images** and **PDFs** selected. Set "If there's no input" to **Stop and Respond**.
-3. Add **Get Details of Files**. Set it to get **File Extension** of **Shortcut Input**.
-4. Add **If**. Condition: **File Extension** **is** `pdf`.
-5. Inside the **If** branch, add **Get Text from Input** with **Shortcut Input** as its input.
-6. Inside the **Otherwise** branch, add **Extract Text from Image** with **Shortcut Input** as its input.
-7. After **End If**, add a **Text** action. Paste the prompt below into it, then on a new line after it type `COA text:` and insert the **If Result** variable after that.
-8. Add **Use Model**. Choose **Private Cloud Compute** as the model. Set its request to the **Text** from step 7. (If the action offers a Follow Up option, leave it off.)
-9. Add **Copy to Clipboard**. Its input should be the output of Use Model (Shortcuts usually fills this in; if not, tap the input and pick the Use Model variable).
-10. Optional: add **Show Notification** with `COA copied — open Entourage and tap Paste COA`.
+2. Tap the **ⓘ** (Details) button → turn on **Show in Share Sheet** → Done. A **Receive** block appears at the top. Tap its input types and leave only **Images** and **PDFs** selected. Set "If there's no input" to **Continue**.
+3. Add **If**. Condition: **Shortcut Input** **does not have any value**.
+4. Inside that **If** branch, add **Choose from Menu**. Set its prompt to `Scan a COA from` and make two options: `Photo` and `File`.
+   - Under **Photo**, add **Select Photos**, then **Set Variable** with the name `COA` and the selected photo as its input.
+   - Under **File**, add **Select File**, then **Set Variable** with the name `COA` and the selected file as its input.
+5. Inside the **Otherwise** branch of the step 3 **If**, add **Set Variable** with the name `COA` and **Shortcut Input** as its input.
+6. After that **End If**, add **Get Details of Files**. Set it to get **File Extension** of the **COA** variable.
+7. Add **If**. Condition: **File Extension** **is** `pdf`.
+8. Inside the **If** branch, add **Get Text from Input** with the **COA** variable as its input.
+9. Inside the **Otherwise** branch, add **Extract Text from Image** with the **COA** variable as its input.
+10. After **End If**, add a **Text** action. Paste the prompt below into it, then on a new line after it type `COA text:` and insert the **If Result** variable from the step 7 **If** after that. (There are two **If** blocks, so check you picked the one after the pdf check.)
+11. Add **Use Model**. Choose **Private Cloud Compute** as the model. Set its request to the **Text** from step 10. (If the action offers a Follow Up option, leave it off.)
+12. Add **Copy to Clipboard**. Its input should be the output of Use Model (Shortcuts usually fills this in; if not, tap the input and pick the Use Model variable).
+13. Optional: add **Show Notification** with `COA copied — open Entourage and tap Paste COA`.
 
-To use it: open the COA (PDF in Files/Mail, or a photo) → Share → **Entourage COA**. Then open Entourage from its Home Screen icon → **+** → **Scan COA** → **Paste COA**, and review the card before adding. iOS will ask to allow pasting; tap **Allow Paste**.
+Three ways to start it:
+- **From the Share Sheet:** open the COA (PDF in Files/Mail, or a photo) → Share → **Entourage COA**. It uses that file directly.
+- **From the Shortcuts app, a Home Screen shortcut icon, or Siri:** run **Entourage COA**; it asks Photo or File, then lets you pick the COA.
+- **From inside Entourage:** **+** → **Scan COA** → **Open Entourage COA**. The app opens the shortcut with nothing attached, so it asks Photo or File as above.
 
-A scanned PDF with no text layer produces no text at step 5. If that happens, screenshot the COA page and share the screenshot instead, so step 6 reads it.
+Whichever way you start it, when the notification appears, go back to Entourage **from its Home Screen icon** → **+** → **Scan COA** → **Paste COA**, and review the card before adding. iOS will ask to allow pasting; tap **Allow Paste**.
+
+A scanned PDF with no text layer produces no text at step 8. If that happens, screenshot the COA page and use the screenshot instead (Share it, or pick **Photo** from the menu), so step 9 reads it.
 
 The prompt to paste in step 7 (identical to the one the app's built-in Scan COA uses):
 
