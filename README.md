@@ -122,7 +122,7 @@ Paste COA tolerates the model wrapping its answer in ```` ```json ```` fences, l
 3. Add **Use Model**. Choose **Private Cloud Compute**. Set its request to the **Clipboard** from step 2.
 4. Add **Show Result** with the output of Use Model as its input.
 
-To use it: in Entourage tap **Ask**, type your question, and tap OK. The app copies the in-stock summary plus your question to the clipboard and opens the shortcut, which shows the answer. If the app can't write to the clipboard, it shows the text in a panel instead so you can copy it and run the shortcut yourself.
+To use it: in Entourage tap **Ask**, type your question in the sheet that opens, and tap **Ask** (or Send on the keyboard). The app copies the in-stock summary plus your question to the clipboard and opens the shortcut, which shows the answer. If the app can't write to the clipboard, it shows the text in a panel instead so you can copy it and run the shortcut yourself.
 
 ## Storage — how it actually works
 

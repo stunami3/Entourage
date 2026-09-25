@@ -2213,20 +2213,45 @@ async function copyForClaude(ctx){
   try{ await navigator.clipboard.writeText(txt); toast('Summary copied. Paste it into Claude'); }
   catch(err){ dlog('clipboard write failed:',err); showCopyPanel('Summary for Claude','Clipboard access is blocked here. Copy this and paste it into your chat.',txt); }
 }
-async function askViaShortcut(){
-  const q=prompt('Ask about what’s in stock:');
-  if(q==null || !q.trim()) return;
-  const txt=buildClaudeSummary(null)+'\n\nQuestion: '+q.trim();
-  try{ await navigator.clipboard.writeText(txt); }
-  catch(err){
+function openAskSheet(){
+  const sheet=document.getElementById('sheet');
+  sheet.innerHTML=`<div class="grabber"></div>
+    <div class="sheet-top"><div><h2 style="font-size:20px">Ask</h2>
+      <div style="font-size:13px;color:var(--muted);margin-top:6px;line-height:1.45">Sends what’s in stock plus your question to the Entourage Ask shortcut.</div></div>
+      <button class="close" id="sheetclose" aria-label="Close">×</button></div>
+    <input class="finput" id="askq" type="text" enterkeyhint="send" autocomplete="off" placeholder="e.g. What helps me sleep tonight?" style="margin-top:14px;font-size:16px;min-height:44px">
+    <button class="primary-btn" id="askgo">Ask</button>
+    <button class="ghost-btn" id="askcancel" style="min-height:44px">Cancel</button>`;
+  sheet.dataset.item='';
+  document.getElementById('sheetclose').addEventListener('click',closeSheet);
+  document.getElementById('askcancel').addEventListener('click',closeSheet);
+  document.getElementById('askgo').addEventListener('click',sendAsk);
+  document.getElementById('askq').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); sendAsk(); } });
+  sheet.scrollTop=0;
+  ensureSheetOpen();
+  document.getElementById('askq').focus();
+}
+/* Must stay synchronous up to writeText(): iOS only allows a silent clipboard write
+   while the tap that triggered it still counts as a recent user interaction. */
+function sendAsk(){
+  const input=document.getElementById('askq');
+  const q=input.value.trim();
+  if(!q){ input.focus(); return; }
+  const txt=buildClaudeSummary(null)+'\n\nQuestion: '+q;
+  let write;
+  try{ write=navigator.clipboard.writeText(txt); }
+  catch(err){ write=Promise.reject(err); }
+  write.then(()=>{
+    closeSheet();
+    location.href='shortcuts://run-shortcut?name=Entourage%20Ask&input=clipboard';
+  }).catch(err=>{
     dlog('clipboard write failed:',err);
+    closeSheet();
     showCopyPanel('Ask','Clipboard access is blocked here, so the Entourage Ask shortcut can’t be started from the app. Copy this, then run the shortcut yourself.',txt);
-    return;
-  }
-  location.href='shortcuts://run-shortcut?name=Entourage%20Ask&input=clipboard';
+  });
 }
 document.getElementById('claudebtn').addEventListener('click',()=>copyForClaude(null));
-document.getElementById('askbtn').addEventListener('click',askViaShortcut);
+document.getElementById('askbtn').addEventListener('click',openAskSheet);
 document.getElementById('pickbtn').addEventListener('click',openPickSheet);
 
 (async function boot(){
